@@ -7,15 +7,51 @@ from .scanner import SecretScanner
 from .validator import SecretValidator
 from .models import Severity
 
-def main():
-    parser = argparse.ArgumentParser(description="Security Guardian - Enterprise Secret Scanner")
-    parser.add_argument("paths", nargs="+", help="Paths to file or directory to scan")
-    parser.add_argument("--format", choices=["text", "json"], default="text", help="Output format")
-    parser.add_argument("--validate", action="store_true", help="Attempt to validate found secrets")
-    parser.add_argument("--exclude", nargs="+", default=[], help="Patterns to exclude from scan")
-    
-    args = parser.parse_args()
+import stat
 
+def install_hook():
+    """
+    Installs the git pre-commit hook.
+    """
+    git_dir = ".git"
+    if not os.path.exists(git_dir):
+        print("[ERROR] .git directory not found. Are you in a Git repository?")
+        sys.exit(1)
+        
+    hook_path = os.path.join(git_dir, "hooks", "pre-commit")
+    
+    # Check if hook already exists
+    if os.path.exists(hook_path):
+        print(f"[INFO] Overwriting existing pre-commit hook at {hook_path}")
+        
+    hook_content = """#!/bin/sh
+echo "Running Security Guardian..."
+security-guardian scan src
+if [ $? -ne 0 ]; then
+    echo "❌ Security Check Failed. Commit Blocked."
+    exit 1
+fi
+echo "✅ Security Check Passed."
+exit 0
+"""
+    
+    try:
+        with open(hook_path, "w", encoding='utf-8') as f:
+            f.write(hook_content)
+        
+        # Make executable (chmod +x)
+        st = os.stat(hook_path)
+        os.chmod(hook_path, st.st_mode | stat.S_IEXEC)
+        
+        print("[SUCCESS] Pre-commit hook installed successfully.")
+        print(f"   Location: {hook_path}")
+        print("   Behavior: Runs 'security-guardian scan src' before every commit.")
+        
+    except Exception as e:
+        print(f"[ERROR] Error installing hook: {e}")
+        sys.exit(1)
+
+def run_scan(args):
     # Phase 2: Load Ignore File
     ignore_file_path = ".security-guardian-ignore"
     if os.path.exists(ignore_file_path):
@@ -63,11 +99,11 @@ def main():
     else:
         # Text Output
         if not results_out:
-            print("✅ No secrets found.")
+            print("[OK] No secrets found.")
         else:
-            print("\n🚨 SCAN COMPLETE: Issues Found")
+            print(f"\n[ALERT] SCAN COMPLETE: Issues Found")
             for res in results_out:
-                icon = "❌" if res['action'] == "BLOCK" else "⚠️"
+                icon = "[X]" if res['action'] == "BLOCK" else "[!]"
                 print(f"{icon} [{res['severity']}] {res['type']} -> {res['action']}")
                 print(f"   File: {res['file']}:{res['line']}")
                 print(f"   Snippet: {res['content']}")
@@ -80,6 +116,28 @@ def main():
         sys.exit(1)
     else:
         sys.exit(0)
+
+def main():
+    parser = argparse.ArgumentParser(description="Security Guardian - Enterprise Secret Scanner")
+    subparsers = parser.add_subparsers(dest="command", required=True, help="Command to execute")
+
+    # Command: scan
+    scan_parser = subparsers.add_parser("scan", help="Scan files or directories for secrets")
+    scan_parser.add_argument("paths", nargs="+", help="Paths to file or directory to scan")
+    scan_parser.add_argument("--format", choices=["text", "json"], default="text", help="Output format")
+    scan_parser.add_argument("--validate", action="store_true", help="Attempt to validate found secrets")
+    scan_parser.add_argument("--exclude", nargs="+", default=[], help="Patterns to exclude from scan")
+    scan_parser.set_defaults(func=run_scan)
+
+    # Command: install-hook
+    hook_parser = subparsers.add_parser("install-hook", help="Install Git pre-commit hook")
+    hook_parser.set_defaults(func=lambda args: install_hook())
+    
+    args = parser.parse_args()
+    if hasattr(args, 'func'):
+        args.func(args)
+    else:
+        parser.print_help()
 
 if __name__ == "__main__":
     main()
