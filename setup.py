@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="security_guardian",
-    version="1.0.0",
+    version="1.2.0",
     description="Enterprise Secret Leakage Prevention Tool",
     author="DevSecOps Platform Team",
     packages=find_packages(where="src"),

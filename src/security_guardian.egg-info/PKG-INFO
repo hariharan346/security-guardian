@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: security_guardian
-Version: 1.0.0
+Version: 1.2.0
 Summary: Enterprise Secret Leakage Prevention Tool
 Author: DevSecOps Platform Team
 Requires-Python: >=3.9

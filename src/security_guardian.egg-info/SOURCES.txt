@@ -2,6 +2,7 @@ README.md
 setup.py
 src/security_guardian/__init__.py
 src/security_guardian/cli.py
+src/security_guardian/hygiene.py
 src/security_guardian/models.py
 src/security_guardian/policy.py
 src/security_guardian/scanner.py

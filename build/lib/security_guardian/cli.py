@@ -6,6 +6,7 @@ from .policy import PolicyEngine
 from .scanner import SecretScanner
 from .validator import SecretValidator
 from .models import Severity
+from .hygiene import check_hygiene
 
 import stat
 
@@ -52,6 +53,19 @@ exit 0
         sys.exit(1)
 
 def run_scan(args):
+    should_block = False
+    
+    # Phase 0: Hygiene Checks
+    hygiene_block, hygiene_messages = check_hygiene()
+    if hygiene_messages:
+        print("\n[HYGIENE CHECK]")
+        for msg in hygiene_messages:
+            print(msg)
+        print("-" * 40)
+        
+    if hygiene_block:
+        should_block = True
+
     # Phase 2: Load Ignore File
     ignore_file_path = ".security-guardian-ignore"
     if os.path.exists(ignore_file_path):
@@ -69,8 +83,8 @@ def run_scan(args):
     for path in args.paths:
         scanner.scan_path(path)
     
-    # Determine Block/Warn
-    should_block = False
+    # Determine Block/Warn (from Scan)
+    # should_block is already potentially True from hygiene
     results_out = []
     
     for issue in scanner.results:
