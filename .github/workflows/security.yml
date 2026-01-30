@@ -19,4 +19,4 @@ jobs:
           
       - name: Run Scan (Block on HIGH)
         run: |
-          security-guardian . --format json --exclude DEMO_GUIDE.md docs/REQUIREMENTS.md
+          security-guardian scan . --format json --exclude DEMO_GUIDE.md docs/REQUIREMENTS.md
