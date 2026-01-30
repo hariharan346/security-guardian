@@ -25,9 +25,11 @@ def install_hook():
     if os.path.exists(hook_path):
         print(f"[INFO] Overwriting existing pre-commit hook at {hook_path}")
         
+    # Updated hook content to use --staged
     hook_content = """#!/bin/sh
 echo "Running Security Guardian..."
-security-guardian scan src
+# Scan current directory in staged mode
+security-guardian scan . --staged
 if [ $? -ne 0 ]; then
     echo "❌ Security Check Failed. Commit Blocked."
     exit 1
@@ -46,7 +48,7 @@ exit 0
         
         print("[SUCCESS] Pre-commit hook installed successfully.")
         print(f"   Location: {hook_path}")
-        print("   Behavior: Runs 'security-guardian scan src' before every commit.")
+        print("   Behavior: Runs 'security-guardian scan . --staged' before every commit.")
         
     except Exception as e:
         print(f"[ERROR] Error installing hook: {e}")
@@ -66,6 +68,16 @@ def run_scan(args):
     if hygiene_block:
         should_block = True
 
+    # Phase 1: Determine Mode
+    # Priority: Staged > All-Files > Include-Untracked > Default
+    scan_mode = "default"
+    if args.staged:
+        scan_mode = "staged"
+    elif args.all_files:
+        scan_mode = "all-files"
+    elif args.include_untracked:
+        scan_mode = "untracked"
+
     # Phase 2: Load Ignore File
     ignore_file_path = ".security-guardian-ignore"
     if os.path.exists(ignore_file_path):
@@ -77,11 +89,17 @@ def run_scan(args):
     
     # Initialize Components
     policy = PolicyEngine()
-    scanner = SecretScanner(policy, exclude_patterns=args.exclude, scan_all_files=args.all_files)
+    # Note: scan_all_files arg in init is for extension filtering override
+    # If mode is all-files, we want to disable extension filtering in scanner too
+    disable_ext_filter = (scan_mode == "all-files")
+    
+    scanner = SecretScanner(policy, exclude_patterns=args.exclude, scan_all_files=disable_ext_filter)
     
     # Run Scan
     for path in args.paths:
-        scanner.scan_path(path)
+        if args.verbose:
+            print(f"[INFO] Scanning {path} (Mode: {scan_mode})")
+        scanner.scan_path(path, mode=scan_mode)
     
     # Determine Block/Warn (from Scan)
     # should_block is already potentially True from hygiene
@@ -113,7 +131,7 @@ def run_scan(args):
     else:
         # Text Output
         if not results_out:
-            print("[OK] No secrets found.")
+            print(f"[OK] No secrets found ({scan_mode} mode).")
         else:
             print(f"\n[ALERT] SCAN COMPLETE: Issues Found")
             for res in results_out:
@@ -132,6 +150,15 @@ def run_scan(args):
         sys.exit(0)
 
 def main():
+    # Ensure generated output handles emojis correctly on all platforms
+    if sys.stdout.encoding != 'utf-8':
+        try:
+            sys.stdout.reconfigure(encoding='utf-8')
+            sys.stderr.reconfigure(encoding='utf-8')
+        except AttributeError:
+            # Python < 3.7 or weird environment
+            pass
+
     parser = argparse.ArgumentParser(description="Security Guardian - Enterprise Secret Scanner")
     subparsers = parser.add_subparsers(dest="command", required=True, help="Command to execute")
 
@@ -141,7 +168,13 @@ def main():
     scan_parser.add_argument("--format", choices=["text", "json"], default="text", help="Output format")
     scan_parser.add_argument("--validate", action="store_true", help="Attempt to validate found secrets")
     scan_parser.add_argument("--exclude", nargs="+", default=[], help="Patterns to exclude from scan")
-    scan_parser.add_argument("--all-files", action="store_true", help="Scan ALL files (slower, but covers everything). Default: Safe Extensions only.")
+    scan_parser.add_argument("--verbose", action="store_true", help="Verbose output")
+    
+    # Mode Flags
+    scan_parser.add_argument("--all-files", action="store_true", help="Scan ALL files (slower, but covers everything). Default: Safe Extensions + Tracked Files only.")
+    scan_parser.add_argument("--staged", action="store_true", help="Scan ONLY staged files (Git Pre-commit mode).")
+    scan_parser.add_argument("--include-untracked", action="store_true", help="Include untracked files (Git default ignores honored).")
+
     scan_parser.set_defaults(func=run_scan)
 
     # Command: install-hook

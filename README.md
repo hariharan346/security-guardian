@@ -47,20 +47,35 @@ security-guardian scan src/ --format json
 
 ### 2. Scanning Strategy 🆕
 
-**Default Mode (Safe):**
-By default, `security-guardian` scans only **known text and source code files** (e.g., `.py`, `.js`, `.json`, `.yml`, `.env`, `.txt`). This ensures:
-- 🚀 **Speed**: No wasted time on binaries or media files.
-- 🛡️ **Safety**: No crashes from trying to read compiled binaries or git objects.
-- 🎯 **Accuracy**: Fewer false positives.
+**Default Mode (Tracked Only):**
+By default, `security-guardian` scans **only Git-tracked files**. This mirrors how CI/CD pipelines work and ensures we don't scan local junk files.
+- ✅ Scans: `git ls-files`
+- ✅ Filters: Only supports safe source extensions (`.py`, `.js`, `.json`, etc.)
+- 🚫 Ignores: Untracked files, binaries, `.git/`, vendor folders.
 
-**All-Files Mode (Advanced):**
-For deep audits, you can force the scanner to check **everything** (except standard ignores like `.git/` or `node_modules/`).
+**Include Untracked (`--include-untracked`):**
+If you want to scan local files that haven't been committed yet (but are not ignored), use this flag.
+- ✅ Scans: Tracked files + Untracked files (respects `.gitignore`)
+- ⚠️ Useful for: Checking a new script before `git add`.
+
+**All-Files Mode (`--all-files`):**
+For deep audits, scan **everything** on disk recursively.
+- ✅ Scans: All files in directory.
+- ✅ Filters: Ignores `.git/` and standard vendor paths.
+- ⚠️ Warning: Slower. Use for deep security audits.
 
 ```bash
+# Standard Scan (Recommended)
+security-guardian scan .
+
+# Check new uncommitted work
+security-guardian scan . --include-untracked
+
+# Audit everything
 security-guardian scan . --all-files
 ```
 
-> **Note:** Even in `--all-files` mode, we safely skip true binary files to prevent crashes.
+> **Note:** Binary files are always safely skipped in all modes to prevent crashes.
 
 ### 3. Install Pre-commit Hook (Recommended)
 You can opt-in to install a local git hook that prevents you from committing secrets. This hook runs ONLY when you verify it's safe.
